@@ -19,6 +19,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --restart always
 
     env:
       POSTGRES_DSN: host=postgres port=5432 dbname=postgres user=postgres password=postgres
@@ -36,7 +37,10 @@ jobs:
         run: pip install requests psycopg2-binary
 
       - name: Wait for Postgres
-        run: until pg_isready -h postgres -U postgres; do echo "waiting..."; sleep 1; done
+        run: |
+          echo "Sleeping for 15 seconds before checking Postgres readiness..."
+          sleep 15
+          timeout 120 bash -c 'until pg_isready -h postgres -U postgres; do echo "waiting..."; sleep 2; done'
 
       - name: Setup DB
         run: |
