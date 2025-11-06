@@ -1,0 +1,50 @@
+name: Crawl GitHub Stars
+on:
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+
+    env:
+      POSTGRES_DSN: host=postgres port=5432 dbname=postgres user=postgres password=postgres
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests psycopg2-binary
+
+      - name: Wait for Postgres
+        run: until pg_isready -h postgres -U postgres; do echo "waiting..."; sleep 1; done
+
+      - name: Setup DB
+        run: |
+          psql "host=postgres user=postgres password=postgres" -c "\i sql/setup_schema.sql"
+
+      - name: Run crawler
+        run: python scripts/crawl_stars.py
+
+      - name: Dump to CSV
+        run: |
+          PGPASSWORD=postgres psql "host=postgres user=postgres password=postgres" -c "\COPY (SELECT * FROM repo_summary) TO '/tmp/repos.csv' CSV HEADER"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-data
+          path: /tmp/repos.csv
